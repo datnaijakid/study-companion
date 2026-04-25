@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^5.12.0",
     "bcryptjs": "^2.4.3",
     "next": "16.2.4",
@@ -18,10 +19,10 @@
     "stripe": "^12.10.0"
   },
   "devDependencies": {
-    "prisma": "^5.12.0",
     "@tailwindcss/postcss": "^4",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
+    "prisma": "^5.12.0",
     "tailwindcss": "^4"
   }
 }
