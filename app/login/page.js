@@ -38,7 +38,7 @@ export default function LoginPage() {
         throw new Error(json.error || "Unable to sign in.");
       }
 
-      router.push("/");
+      window.location.href = "/";
     } catch (requestError) {
       setError(requestError.message || "Sign in failed.");
     } finally {

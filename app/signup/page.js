@@ -45,7 +45,7 @@ export default function SignUpPage() {
         throw new Error(json.error || "Unable to create account.");
       }
 
-      router.push("/");
+      window.location.href = "/";
     } catch (requestError) {
       setError(requestError.message || "Sign up failed.");
     } finally {

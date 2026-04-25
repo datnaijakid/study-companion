@@ -9,6 +9,37 @@ const EXAMPLES = [
   "Compare the causes of World War I and World War II in a 1000-word essay.",
 ];
 
+function truncateText(value, maxLength = 72) {
+  if (!value) return "Untitled assignment";
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  if (trimmed.length <= maxLength) return trimmed;
+  return `${trimmed.slice(0, maxLength - 3).trimEnd()}...`;
+}
+
+function deriveAssignmentTitle(prompt) {
+  const firstLine = prompt
+    .split("\n")
+    .map((line) => line.trim())
+    .find(Boolean);
+
+  return truncateText(firstLine || prompt, 72);
+}
+
+function normalizeSavedResult(savedResult) {
+  if (savedResult?.breakdown && savedResult?.progress) {
+    return savedResult;
+  }
+
+  return {
+    breakdown: savedResult,
+    progress: {
+      doneSteps: {},
+      checklist: {},
+      openSteps: {},
+    },
+  };
+}
+
 async function readJsonSafely(response) {
   const text = await response.text();
   if (!text) return {};
@@ -114,11 +145,20 @@ export default function Home() {
 
     setSaveStatus("");
 
-    const title = data.task_breakdown?.[0]?.title || prompt.slice(0, 60);
+    const title = deriveAssignmentTitle(prompt);
+    const result = {
+      breakdown: data,
+      progress: {
+        doneSteps,
+        checklist,
+        openSteps,
+      },
+    };
+
     const response = await fetch("/api/assignments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, prompt, result: data }),
+      body: JSON.stringify({ title, prompt, result }),
     });
     const json = await readJsonSafely(response);
 
@@ -157,11 +197,15 @@ export default function Home() {
   }
 
   function handleLoadAssignment(assignment) {
+    const normalized = normalizeSavedResult(assignment.result);
+
     setPrompt(assignment.prompt);
-    setData(assignment.result);
+    setData(normalized.breakdown);
+    setDoneSteps(normalized.progress?.doneSteps || {});
+    setChecklist(normalized.progress?.checklist || {});
+    setOpenSteps(normalized.progress?.openSteps || {});
     setError("");
     setSaveStatus(`Loaded "${assignment.title}" into your workspace.`);
-    resetWorkspace();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -341,37 +385,51 @@ export default function Home() {
             {savedAssignments.length > 0 ? (
               <div className="space-y-3">
                 {savedAssignments.map((assignment) => (
-                  <div
-                    key={assignment.id}
-                    className="rounded-2xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900"
-                  >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-neutral-900 dark:text-neutral-100">{assignment.title}</div>
-                        <div className="mt-1 text-xs text-neutral-500">{new Date(assignment.savedAt).toLocaleString()}</div>
-                        <div className="mt-2 line-clamp-3 overflow-hidden text-sm text-neutral-600 dark:text-neutral-400">
-                          {assignment.prompt}
+                  (() => {
+                    const normalized = normalizeSavedResult(assignment.result);
+                    const savedChecklist = normalized.progress?.checklist || {};
+                    const savedCheckCount = Object.values(savedChecklist).filter(Boolean).length;
+                    const savedCheckTotal = normalized.breakdown?.checklist?.length || 0;
+
+                    return (
+                      <div
+                        key={assignment.id}
+                        className="rounded-2xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold text-neutral-900 dark:text-neutral-100">{assignment.title}</div>
+                            <div className="mt-1 text-xs text-neutral-500">{new Date(assignment.savedAt).toLocaleString()}</div>
+                            <div className="mt-2 line-clamp-3 overflow-hidden text-sm text-neutral-600 dark:text-neutral-400">
+                              {assignment.prompt}
+                            </div>
+                            {savedCheckTotal > 0 && (
+                              <div className="mt-3 text-xs text-neutral-500">
+                                Progress: {savedCheckCount} of {savedCheckTotal} checklist items completed
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleLoadAssignment(assignment)}
+                              className="rounded-full border border-neutral-200 px-3 py-1.5 text-xs text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                            >
+                              Load
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteAssignment(assignment.id)}
+                              disabled={deletingId === assignment.id}
+                              className="rounded-full border border-red-200 px-3 py-1.5 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950"
+                            >
+                              {deletingId === assignment.id ? "Deleting..." : "Delete"}
+                            </button>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleLoadAssignment(assignment)}
-                          className="rounded-full border border-neutral-200 px-3 py-1.5 text-xs text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
-                        >
-                          Load
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteAssignment(assignment.id)}
-                          disabled={deletingId === assignment.id}
-                          className="rounded-full border border-red-200 px-3 py-1.5 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950"
-                        >
-                          {deletingId === assignment.id ? "Deleting..." : "Delete"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                    );
+                  })()
                 ))}
               </div>
             ) : (
