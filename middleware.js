@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 const PUBLIC_PATHS = ["/login", "/signup", "/api/auth", "/api/stripe/webhook", "/favicon.ico"];
 
-export function middleware(req) {
+export default function middleware(req) {
   const { pathname } = req.nextUrl;
 
   if (
