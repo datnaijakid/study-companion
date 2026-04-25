@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { authenticateRequest, buildUserPayload } from "../../../lib/auth";
 
 export async function GET(request) {

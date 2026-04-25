@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { createSession, verifyCredentials } from "../../../../lib/auth";
 
 export async function POST(request) {

@@ -1,4 +1,5 @@
 // app/api/breakdown/route.js
+export const dynamic = 'force-dynamic';
 import OpenAI from "openai";
 import { authenticateRequest, incrementUpload } from "../../../lib/auth";
 

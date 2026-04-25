@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { logoutSession, parseCookies } from "../../../../lib/auth";
 
 export async function POST(request) {

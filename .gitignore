@@ -32,8 +32,16 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+.env.local
+.env.production
 
+# local sqlite / legacy db files
 dev.db
+*.db
+*.db-journal
+
+# data folder (legacy json db)
+data/db.json
 
 # vercel
 .vercel

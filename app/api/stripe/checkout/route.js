@@ -1,6 +1,7 @@
+export const dynamic = 'force-dynamic';
 import Stripe from "stripe";
 import { authenticateRequest } from "../../../../lib/auth";
-import prisma from "../../../../lib/prisma";
+import { prisma } from "../../../../lib/prisma";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2024-11-28",

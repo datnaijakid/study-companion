@@ -14,7 +14,7 @@ A Next.js study helper that converts assignment prompts into a guided plan using
 
 - React UI in `app/page.js`
 - App Router auth guard via `middleware.js`
-- SQLite + Prisma database backend
+- PostgreSQL + Prisma database backend (Supabase)
 - Stripe checkout integration for premium account upgrades
 - Saved assignments stored per user
 - OpenAI `gpt-4o-mini` breakdown generation
@@ -23,12 +23,12 @@ A Next.js study helper that converts assignment prompts into a guided plan using
 
 - Next.js 16.2.4
 - React 19.2.4
-- Prisma + SQLite
+- Prisma + PostgreSQL (Supabase)
 - Stripe payments
 - Tailwind CSS v4
 - OpenAI Node SDK
 
-## Setup
+## Local Setup
 
 1. Clone the repo:
 
@@ -43,22 +43,30 @@ A Next.js study helper that converts assignment prompts into a guided plan using
    npm install
    ```
 
-3. Create an `.env.local` file with the values below.
+3. Create an `.env.local` file with the values from `.env`.
 
-4. Generate Prisma client and initialize the database:
+4. Generate Prisma client:
 
    ```bash
    npx prisma generate
-   npx prisma db push
    ```
 
-5. Start the dev server:
+5. Push the schema to the database. For Supabase, use the **direct connection** (port `5432`) when running migrations:
+
+   ```bash
+   # Temporarily switch DATABASE_URL to port 5432 for this command
+   DATABASE_URL="postgresql://postgres.[PROJECT_REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres" npx prisma db push
+   ```
+
+   The app runtime continues using the pooler URL (port `6543`) for normal queries.
+
+6. Start the dev server:
 
    ```bash
    npm run dev
    ```
 
-6. Open the app:
+7. Open the app:
 
    ```
    http://localhost:3000
@@ -69,23 +77,38 @@ A Next.js study helper that converts assignment prompts into a guided plan using
 Create `.env.local` at the project root with:
 
 ```env
+# Supabase — use the connection pooler (port 6543) for app queries
+DATABASE_URL=postgresql://postgres.[PROJECT_REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres
+
 OPENAI_API_KEY=your_openai_api_key_here
-DATABASE_URL=file:./dev.db
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 STRIPE_PRICE_ID=price_...
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-> `.env.local` and `.env` are ignored by Git.
+> `.env.local` and `.env` are ignored by Git. The `.env` file in this repo is a commented template only.
 
 ## Database
 
-This project uses Prisma with SQLite.
+This project uses Prisma with **PostgreSQL via Supabase**.
 
 - schema: `prisma/schema.prisma`
-- local database file: `dev.db`
 - user accounts, sessions, and assignments are stored in the database
+- `DATABASE_URL` should point to Supabase's **connection pooler** (port `6543`) for normal app queries
+- For Prisma migrations (`npx prisma db push`), use the **direct connection** (port `5432`) or the migration will hang
+- SSL certificate verification is handled automatically in `lib/prisma.js` for cloud-hosted databases
+
+## Deploying to Vercel
+
+1. Push your code to GitHub.
+2. Import the repository in the [Vercel Dashboard](https://vercel.com).
+3. Add all environment variables listed above in **Project Settings → Environment Variables**.
+4. For `DATABASE_URL`, use the **connection pooler** string from Supabase (port `6543`).
+5. Run `npx prisma db push` locally against the **direct connection** (port `5432`) to set up the database before deploying.
+6. Deploy. Vercel will run `prisma generate` automatically via the `postinstall` script.
+
+> After changing the schema, run `npx prisma db push` locally against the direct connection, then redeploy.
 
 ## Payment Flow
 
@@ -113,7 +136,7 @@ This project uses Prisma with SQLite.
 2. Commit changes:
 
    ```bash
-   git commit -m "Add Prisma database and Stripe payment flow"
+   git commit -m "Configure for Vercel + Supabase deployment"
    ```
 
 3. Push to GitHub:
