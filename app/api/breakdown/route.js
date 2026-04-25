@@ -1,32 +1,63 @@
 import OpenAI from "openai";
 import { authenticateRequest, incrementUpload } from "../../../lib/auth";
 
-const SYSTEM_PROMPT = `You are a helpful study tutor. Your ONLY job is to help students understand and work through assignments themselves - never write essays, solve problems fully, or give direct answers.
+const BREAKDOWN_SCHEMA = {
+  name: "study_breakdown",
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      guarded: { type: "boolean" },
+      guard_message: { type: "string" },
+      task_breakdown: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            title: { type: "string" },
+            explanation: { type: "string" },
+            why: { type: "string" },
+            hint: { type: "string" },
+          },
+          required: ["title", "explanation", "why", "hint"],
+        },
+      },
+      checklist: {
+        type: "array",
+        items: { type: "string" },
+      },
+    },
+    required: ["guarded", "guard_message", "task_breakdown", "checklist"],
+  },
+  strict: true,
+};
 
-If the user is trying to get you to do their work (e.g. "write my essay", "solve this for me", "give me the answer"), gently decline and return a guard response instead.
+const SYSTEM_PROMPT = `You are a helpful study tutor inside a study-planning app.
 
-Analyze the assignment and return ONLY valid JSON (no markdown, no preamble) in this exact shape:
-{
-  "guarded": false,
-  "guard_message": "",
-  "task_breakdown": [
-    { "title": "Step title", "explanation": "What this step means and involves", "why": "Why this step matters", "hint": "A guiding thought or question - never the answer" }
-  ],
-  "checklist": ["item 1", "item 2", "item 3", "item 4", "item 5", "item 6"]
-}
+Your job is to break assignments into manageable steps, explain what each step is for, and give hints that help the student think.
+
+Important:
+- Always help with the request by turning it into a study breakdown, even if the student phrases it as "do it for me".
+- Do not refuse or moralize.
+- Do not write a final essay, full finished solution, or submission-ready response.
+- Instead, convert the request into a practical learning plan that helps the student complete the work themselves.
+
+Return only JSON that matches the required schema.
 
 Rules:
-- guarded: true if the request asks you to do the work for them
-- guard_message: a friendly redirect (only if guarded)
-- 4-6 task_breakdown steps, each with a real hint that prompts thinking
-- 5-7 checklist items
-- Never include actual answers, full paragraphs of content, or completed work in any field
-- Hints should say things like "Think about...", "Consider...", "Ask yourself...", "What does X suggest about Y?"`;
+- Always set guarded to false.
+- Always set guard_message to an empty string.
+- Provide 4 to 6 concrete steps.
+- Keep explanations practical and student-friendly.
+- Give hints that nudge thinking without revealing a finished answer.
+- Include 5 to 7 checklist items.`;
 
 export async function POST(request) {
   try {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const user = await authenticateRequest(request);
+
     if (!user) {
       return Response.json({ error: "Authentication required." }, { status: 401 });
     }
@@ -49,20 +80,36 @@ export async function POST(request) {
 
     const completion = await client.chat.completions.create({
       model: "gpt-4o-mini",
-      max_tokens: 1000,
+      response_format: {
+        type: "json_schema",
+        json_schema: BREAKDOWN_SCHEMA,
+      },
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: prompt.trim() },
+        {
+          role: "user",
+          content: `Create a study breakdown for this assignment or question:\n\n${prompt.trim()}`,
+        },
       ],
     });
 
     await incrementUpload(user.id);
 
-    const raw = completion.choices[0].message.content || "";
-    const clean = raw.replace(/```json|```/g, "").trim();
-    const parsed = JSON.parse(clean);
+    const raw = completion.choices[0]?.message?.content || "";
+    const parsed = JSON.parse(raw);
 
-    return Response.json(parsed);
+    if (!parsed.task_breakdown?.length || !parsed.checklist?.length) {
+      return Response.json(
+        { error: "The study breakdown could not be generated. Please try again." },
+        { status: 500 }
+      );
+    }
+
+    return Response.json({
+      ...parsed,
+      guarded: false,
+      guard_message: "",
+    });
   } catch (error) {
     console.error("Breakdown error:", error);
     return Response.json({ error: "Something went wrong. Please try again." }, { status: 500 });

@@ -201,7 +201,7 @@ export default function Home() {
           onChange={(event) => setPrompt(event.target.value)}
         />
 
-        <div className="flex flex-wrap items-center gap-2 mt-3 mb-4">
+        <div className="mt-3 mb-4 flex flex-wrap items-center gap-2">
           <span className="text-xs text-neutral-400">Try:</span>
           {EXAMPLES.map((example, index) => (
             <button
@@ -257,14 +257,7 @@ export default function Home() {
           </div>
         )}
 
-        {data?.guarded && (
-          <div className="mt-6 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
-            <div className="font-medium mb-1">Let&apos;s work through this together</div>
-            {data.guard_message}
-          </div>
-        )}
-
-        {data && !data.guarded && (
+        {data && (
           <>
             <div className="mt-8 flex flex-col gap-6">
               <div>
