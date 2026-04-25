@@ -9,6 +9,17 @@ const EXAMPLES = [
   "Compare the causes of World War I and World War II in a 1000-word essay.",
 ];
 
+async function readJsonSafely(response) {
+  const text = await response.text();
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: text };
+  }
+}
+
 export default function Home() {
   const router = useRouter();
   const [prompt, setPrompt] = useState("");
@@ -21,13 +32,14 @@ export default function Home() {
   const [openSteps, setOpenSteps] = useState({});
   const [doneSteps, setDoneSteps] = useState({});
   const [checklist, setChecklist] = useState({});
+  const [deletingId, setDeletingId] = useState("");
 
   useEffect(() => {
     async function loadUser() {
       try {
         const response = await fetch("/api/user");
         if (!response.ok) throw new Error("Authentication required.");
-        const json = await response.json();
+        const json = await readJsonSafely(response);
         setUser(json);
       } catch {
         router.push("/login");
@@ -39,6 +51,12 @@ export default function Home() {
     loadUser();
   }, [router]);
 
+  function resetWorkspace() {
+    setOpenSteps({});
+    setDoneSteps({});
+    setChecklist({});
+  }
+
   async function run() {
     if (!prompt.trim()) return;
 
@@ -46,9 +64,7 @@ export default function Home() {
     setData(null);
     setError("");
     setSaveStatus("");
-    setOpenSteps({});
-    setDoneSteps({});
-    setChecklist({});
+    resetWorkspace();
 
     try {
       const response = await fetch("/api/breakdown", {
@@ -56,14 +72,14 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt }),
       });
-      const json = await response.json();
+      const json = await readJsonSafely(response);
       if (!response.ok) throw new Error(json.error || "Something went wrong.");
 
       setData(json);
 
       const refreshed = await fetch("/api/user");
       if (refreshed.ok) {
-        setUser(await refreshed.json());
+        setUser(await readJsonSafely(refreshed));
       }
     } catch (requestError) {
       setError(requestError.message || "Something went wrong.");
@@ -81,7 +97,7 @@ export default function Home() {
     setSaveStatus("");
 
     const response = await fetch("/api/billing/checkout", { method: "POST" });
-    const json = await response.json();
+    const json = await readJsonSafely(response);
 
     if (!response.ok) {
       setSaveStatus(json.error || "Unable to start checkout.");
@@ -104,7 +120,7 @@ export default function Home() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title, prompt, result: data }),
     });
-    const json = await response.json();
+    const json = await readJsonSafely(response);
 
     if (!response.ok) {
       setSaveStatus(json.error || "Unable to save assignment.");
@@ -113,6 +129,48 @@ export default function Home() {
 
     setUser(json);
     setSaveStatus("Assignment saved to your premium account.");
+  }
+
+  async function handleDeleteAssignment(assignmentId) {
+    setSaveStatus("");
+    setDeletingId(assignmentId);
+
+    try {
+      const response = await fetch("/api/assignments", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assignmentId }),
+      });
+      const json = await readJsonSafely(response);
+
+      if (!response.ok) {
+        throw new Error(json.error || "Unable to delete assignment.");
+      }
+
+      setUser(json);
+      setSaveStatus("Saved assignment deleted.");
+    } catch (requestError) {
+      setSaveStatus(requestError.message || "Unable to delete assignment.");
+    } finally {
+      setDeletingId("");
+    }
+  }
+
+  function handleLoadAssignment(assignment) {
+    setPrompt(assignment.prompt);
+    setData(assignment.result);
+    setError("");
+    setSaveStatus(`Loaded "${assignment.title}" into your workspace.`);
+    resetWorkspace();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function clearCurrentBreakdown() {
+    setData(null);
+    setPrompt("");
+    setError("");
+    setSaveStatus("");
+    resetWorkspace();
   }
 
   function toggleStep(index) {
@@ -132,6 +190,7 @@ export default function Home() {
   const checkTotal = data?.checklist?.length || 0;
   const progress = checkTotal ? Math.round((checkCount / checkTotal) * 100) : 0;
   const canSubmit = Boolean(prompt.trim()) && !loading && (user?.premium || user?.uploadsRemaining > 0);
+  const savedAssignments = user?.savedAssignments || [];
 
   if (authLoading) {
     return (
@@ -215,14 +274,26 @@ export default function Home() {
           ))}
         </div>
 
-        <button
-          type="button"
-          onClick={run}
-          disabled={!canSubmit}
-          className="flex items-center gap-2 rounded-lg border border-neutral-200 px-5 py-2.5 text-[15px] font-medium transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-neutral-700 dark:hover:bg-neutral-800"
-        >
-          {loading ? "Breaking it down..." : "Break it down ->"}
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={run}
+            disabled={!canSubmit}
+            className="flex items-center gap-2 rounded-lg border border-neutral-200 px-5 py-2.5 text-[15px] font-medium transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-neutral-700 dark:hover:bg-neutral-800"
+          >
+            {loading ? "Breaking it down..." : "Break it down ->"}
+          </button>
+
+          {(prompt || data) && (
+            <button
+              type="button"
+              onClick={clearCurrentBreakdown}
+              className="rounded-lg border border-neutral-200 px-4 py-2.5 text-sm text-neutral-600 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+            >
+              Clear workspace
+            </button>
+          )}
+        </div>
 
         {!user?.premium && user?.uploadsRemaining <= 0 && (
           <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
@@ -254,6 +325,60 @@ export default function Home() {
         {error && (
           <div className="mt-6 rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
             {error}
+          </div>
+        )}
+
+        {user?.premium && (
+          <div className="mt-8 rounded-3xl border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-950">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium text-neutral-900 dark:text-neutral-100">Saved assignments</div>
+                <div className="text-xs text-neutral-500">Load a previous breakdown or remove it from your library.</div>
+              </div>
+              <div className="text-xs text-neutral-500">{savedAssignments.length} saved</div>
+            </div>
+
+            {savedAssignments.length > 0 ? (
+              <div className="space-y-3">
+                {savedAssignments.map((assignment) => (
+                  <div
+                    key={assignment.id}
+                    className="rounded-2xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900"
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-neutral-900 dark:text-neutral-100">{assignment.title}</div>
+                        <div className="mt-1 text-xs text-neutral-500">{new Date(assignment.savedAt).toLocaleString()}</div>
+                        <div className="mt-2 line-clamp-3 overflow-hidden text-sm text-neutral-600 dark:text-neutral-400">
+                          {assignment.prompt}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleLoadAssignment(assignment)}
+                          className="rounded-full border border-neutral-200 px-3 py-1.5 text-xs text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                        >
+                          Load
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAssignment(assignment.id)}
+                          disabled={deletingId === assignment.id}
+                          className="rounded-full border border-red-200 px-3 py-1.5 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950"
+                        >
+                          {deletingId === assignment.id ? "Deleting..." : "Delete"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-neutral-500">
+                You have no saved assignments yet. Save a breakdown and it will stay here between sessions.
+              </p>
+            )}
           </div>
         )}
 
@@ -378,50 +503,18 @@ export default function Home() {
             </div>
 
             {user?.premium && (
-              <>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={handleSaveAssignment}
-                    className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                  >
-                    Save assignment
-                  </button>
-                  <span className="text-sm text-neutral-500">
-                    Saved assignments are stored on your premium account.
-                  </span>
-                </div>
-
-                <div className="mt-6 rounded-3xl border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-950">
-                  <div className="mb-3 text-sm font-medium text-neutral-900 dark:text-neutral-100">
-                    Saved assignments
-                  </div>
-                  {user.savedAssignments.length > 0 ? (
-                    <div className="space-y-3">
-                      {user.savedAssignments.map((assignment) => (
-                        <div
-                          key={assignment.id}
-                          className="rounded-2xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900"
-                        >
-                          <div className="font-semibold text-neutral-900 dark:text-neutral-100">
-                            {assignment.title}
-                          </div>
-                          <div className="mt-1 text-xs text-neutral-500">
-                            {new Date(assignment.savedAt).toLocaleString()}
-                          </div>
-                          <div className="mt-2 overflow-hidden text-sm text-neutral-600 dark:text-neutral-400">
-                            {assignment.prompt}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-neutral-500">
-                      You have no saved assignments yet. Use Save assignment after a breakdown.
-                    </p>
-                  )}
-                </div>
-              </>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={handleSaveAssignment}
+                  className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                >
+                  Save assignment
+                </button>
+                <span className="text-sm text-neutral-500">
+                  Save this breakdown to revisit it from your premium library.
+                </span>
+              </div>
             )}
           </>
         )}
