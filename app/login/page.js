@@ -3,6 +3,17 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+async function readJsonSafely(response) {
+  const text = await response.text();
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: text };
+  }
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -22,8 +33,10 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      const json = await response.json();
-      if (!response.ok) throw new Error(json.error || "Unable to sign in.");
+      const json = await readJsonSafely(response);
+      if (!response.ok) {
+        throw new Error(json.error || "Unable to sign in.");
+      }
 
       router.push("/");
     } catch (requestError) {
