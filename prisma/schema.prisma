@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                         String       @id @default(cuid())
+  email                      String       @unique
+  password                   String
+  premium                    Boolean      @default(false)
+  uploads                    Int          @default(0)
+  lemonSqueezyCustomerId     String?
+  lemonSqueezyOrderId        String?
+  lemonSqueezySubscriptionId String?
+  premiumActivatedAt         DateTime?
+  createdAt                  DateTime     @default(now())
+  sessions                   Session[]
+  assignments                Assignment[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  expiresAt DateTime
+}
+
+model Assignment {
+  id        String   @id @default(cuid())
+  title     String
+  prompt    String
+  result    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+}

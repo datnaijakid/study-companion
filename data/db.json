@@ -1,0 +1,13 @@
+{
+  "users": [
+    {
+      "id": "user-1",
+      "email": "member@example.com",
+      "password": "password123",
+      "premium": false,
+      "uploads": 0,
+      "savedAssignments": []
+    }
+  ],
+  "sessions": []
+}
